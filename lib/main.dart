@@ -7,8 +7,13 @@ import 'screens/history_screen.dart';
 import 'screens/report_screen.dart';
 import 'screens/emergency_contact_screen.dart';
 import 'screens/settings_screen.dart';
+import 'screens/login_screen.dart';
+import 'screens/add_prescription_screen.dart';
+import 'services/api_service.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await ApiService.init();
   runApp(const MedicineReminderApp());
 }
 
@@ -28,11 +33,13 @@ class MedicineReminderApp extends StatelessWidget {
           elevation: 0,
         ),
       ),
-      home: const MainNavigation(),
+      home: ApiService.isLoggedIn ? const MainNavigation() : const LoginScreen(),
       routes: {
+        '/main': (context) => const MainNavigation(),
+        '/login': (context) => const LoginScreen(),
         '/add-medicine': (context) => const AddMedicineScreen(),
         '/add-schedule': (context) => const AddScheduleScreen(),
-        '/emergency-contacts': (context) => const EmergencyContactScreen(),
+        '/add-prescription': (context) => const AddPrescriptionScreen(),
         '/settings': (context) => const SettingsScreen(),
       },
     );
@@ -54,6 +61,7 @@ class _MainNavigationState extends State<MainNavigation> {
     MedicineListScreen(),
     HistoryScreen(),
     ReportScreen(),
+    EmergencyContactScreen(),
   ];
 
   @override
@@ -67,6 +75,7 @@ class _MainNavigationState extends State<MainNavigation> {
             _currentIndex = index;
           });
         },
+        labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
         destinations: const [
           NavigationDestination(
             icon: Icon(Icons.calendar_month_outlined),
@@ -88,107 +97,10 @@ class _MainNavigationState extends State<MainNavigation> {
             selectedIcon: Icon(Icons.bar_chart),
             label: 'Báo cáo',
           ),
-        ],
-      ),
-      drawer: _buildDrawer(),
-    );
-  }
-
-  Widget _buildDrawer() {
-    return Drawer(
-      child: ListView(
-        padding: EdgeInsets.zero,
-        children: [
-          DrawerHeader(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                colors: [Color(0xFF4CAF50), Color(0xFF66BB6A)],
-              ),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                const CircleAvatar(
-                  radius: 30,
-                  backgroundColor: Colors.white,
-                  child: Icon(Icons.person, size: 36, color: Colors.green),
-                ),
-                const SizedBox(height: 12),
-                const Text(
-                  'Ứng dụng nhắc uống thuốc',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                Text(
-                  'Chăm sóc sức khỏe mỗi ngày',
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.8),
-                    fontSize: 13,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          ListTile(
-            leading: const Icon(Icons.home),
-            title: const Text('Trang chủ'),
-            onTap: () {
-              setState(() => _currentIndex = 0);
-              Navigator.pop(context);
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.medication),
-            title: const Text('Danh sách thuốc'),
-            onTap: () {
-              setState(() => _currentIndex = 1);
-              Navigator.pop(context);
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.alarm_add),
-            title: const Text('Đặt lịch nhắc'),
-            onTap: () {
-              Navigator.pop(context);
-              Navigator.pushNamed(context, '/add-schedule');
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.history),
-            title: const Text('Lịch sử'),
-            onTap: () {
-              setState(() => _currentIndex = 2);
-              Navigator.pop(context);
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.bar_chart),
-            title: const Text('Báo cáo'),
-            onTap: () {
-              setState(() => _currentIndex = 3);
-              Navigator.pop(context);
-            },
-          ),
-          const Divider(),
-          ListTile(
-            leading: const Icon(Icons.contacts),
-            title: const Text('Danh bạ khẩn cấp'),
-            onTap: () {
-              Navigator.pop(context);
-              Navigator.pushNamed(context, '/emergency-contacts');
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.settings),
-            title: const Text('Cài đặt'),
-            onTap: () {
-              Navigator.pop(context);
-              Navigator.pushNamed(context, '/settings');
-            },
+          NavigationDestination(
+            icon: Icon(Icons.contacts_outlined),
+            selectedIcon: Icon(Icons.contacts),
+            label: 'Liên hệ',
           ),
         ],
       ),
