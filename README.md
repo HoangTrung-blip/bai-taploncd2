@@ -1,7 +1,23 @@
 # medicine_reminder
 
-A new Flutter project.
+Ứng dụng nhắc uống thuốc (Flutter + NestJS backend)
 
+## Hướng dẫn chạy test
+
+### Backend (NestJS)
+
+```bash
+cd backend
+npx jest --verbose
+```
+
+### Frontend (Flutter)
+
+```bash
+flutter test --reporter expanded
+```
+
+---
 ## Getting Started
 
 This project is a starting point for a Flutter application.
