@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../services/medicine_service.dart';
 
 class AddMedicineScreen extends StatefulWidget {
   const AddMedicineScreen({super.key});
@@ -25,8 +26,6 @@ class _AddMedicineScreenState extends State<AddMedicineScreen> {
     'Khác',
   ];
 
-  bool _hasImage = false;
-
   @override
   void dispose() {
     _nameController.dispose();
@@ -50,10 +49,6 @@ class _AddMedicineScreenState extends State<AddMedicineScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Image section
-              _buildImagePicker(),
-              const SizedBox(height: 24),
-
               // Name
               const Text(
                 'Tên thuốc *',
@@ -203,66 +198,33 @@ class _AddMedicineScreenState extends State<AddMedicineScreen> {
     );
   }
 
-  Widget _buildImagePicker() {
-    return Center(
-      child: GestureDetector(
-        onTap: () {
-          setState(() {
-            _hasImage = !_hasImage;
-          });
+  void _submitForm() async {
+    if (_formKey.currentState!.validate()) {
+      try {
+        await MedicineService.create({
+          'name': _nameController.text,
+          'type': _selectedType,
+          'dosage': _dosageController.text,
+          'totalQuantity': int.parse(_quantityController.text),
+          'remainingQuantity': int.parse(_quantityController.text),
+          'note': _noteController.text.isNotEmpty ? _noteController.text : null,
+        });
+        if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Chức năng chụp ảnh sẽ được tích hợp sau'),
-              duration: Duration(seconds: 1),
+            SnackBar(
+              content: Text('Đã thêm thuốc: ${_nameController.text}'),
+              backgroundColor: Colors.green,
             ),
           );
-        },
-        child: Container(
-          width: 150,
-          height: 150,
-          decoration: BoxDecoration(
-            color: Colors.grey[100],
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: Colors.grey[300]!,
-              width: 2,
-              style: BorderStyle.solid,
-            ),
-          ),
-          child: _hasImage
-              ? ClipRRect(
-                  borderRadius: BorderRadius.circular(14),
-                  child: const Icon(
-                    Icons.medication,
-                    size: 60,
-                    color: Colors.green,
-                  ),
-                )
-              : Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.camera_alt, size: 40, color: Colors.grey[400]),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Chụp ảnh vỉ thuốc',
-                      style: TextStyle(color: Colors.grey[500], fontSize: 13),
-                    ),
-                  ],
-                ),
-        ),
-      ),
-    );
-  }
-
-  void _submitForm() {
-    if (_formKey.currentState!.validate()) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Đã thêm thuốc: ${_nameController.text}'),
-          backgroundColor: Colors.green,
-        ),
-      );
-      Navigator.pop(context);
+          Navigator.pop(context, true);
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Lỗi: $e'), backgroundColor: Colors.red),
+          );
+        }
+      }
     }
   }
 }

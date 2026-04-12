@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../models/prescription.dart';
+import '../services/prescription_service.dart';
 
 class MedicineListScreen extends StatefulWidget {
   const MedicineListScreen({super.key});
@@ -8,43 +10,30 @@ class MedicineListScreen extends StatefulWidget {
 }
 
 class _MedicineListScreenState extends State<MedicineListScreen> {
-  final List<_MedicineData> _medicines = [
-    _MedicineData(
-      name: 'Paracetamol',
-      type: 'Viên nén',
-      dosage: '1 viên',
-      remaining: 20,
-      total: 30,
-    ),
-    _MedicineData(
-      name: 'Vitamin C',
-      type: 'Viên nén',
-      dosage: '2 viên',
-      remaining: 15,
-      total: 30,
-    ),
-    _MedicineData(
-      name: 'Amoxicillin',
-      type: 'Viên nang',
-      dosage: '1 viên',
-      remaining: 3,
-      total: 20,
-    ),
-    _MedicineData(
-      name: 'Omeprazol',
-      type: 'Viên nang',
-      dosage: '1 viên',
-      remaining: 10,
-      total: 14,
-    ),
-    _MedicineData(
-      name: 'Siro ho',
-      type: 'Siro',
-      dosage: '10ml',
-      remaining: 80,
-      total: 100,
-    ),
-  ];
+  Prescription? _prescription;
+  bool _isLoading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+    try {
+      final prescriptions = await PrescriptionService.getActive();
+      _prescription = prescriptions.isNotEmpty ? prescriptions.first : null;
+    } catch (e) {
+      _error = e.toString();
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -52,120 +41,160 @@ class _MedicineListScreenState extends State<MedicineListScreen> {
       appBar: AppBar(
         title: const Text('Danh sách thuốc'),
         centerTitle: true,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.settings_outlined),
+            onPressed: () => Navigator.pushNamed(context, '/settings'),
+          ),
+        ],
       ),
-      body: ListView.builder(
-        padding: const EdgeInsets.all(16),
-        itemCount: _medicines.length,
-        itemBuilder: (context, index) {
-          return _buildMedicineCard(_medicines[index]);
-        },
-      ),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : _error != null
+              ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text('Lỗi: $_error', textAlign: TextAlign.center),
+                      const SizedBox(height: 16),
+                      ElevatedButton(onPressed: _loadData, child: const Text('Thử lại')),
+                    ],
+                  ),
+                )
+              : _prescription == null
+                  ? const Center(child: Text('Chưa có đơn thuốc'))
+                  : Column(
+                      children: [
+                        _buildPrescriptionHeader(),
+                        const SizedBox(height: 8),
+                        Expanded(
+                          child: RefreshIndicator(
+                            onRefresh: _loadData,
+                            child: ListView.builder(
+                              padding: const EdgeInsets.symmetric(horizontal: 16),
+                              itemCount: _prescription!.medicines.length,
+                              itemBuilder: (context, index) {
+                                return _buildMedicineCard(_prescription!.medicines[index]);
+                              },
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          Navigator.pushNamed(context, '/add-medicine');
-        },
+        onPressed: () => Navigator.pushNamed(context, '/add-medicine'),
         child: const Icon(Icons.add),
       ),
     );
   }
 
-  Widget _buildMedicineCard(_MedicineData medicine) {
-    final double percentage = medicine.remaining / medicine.total;
-    final bool isLow = medicine.remaining <= 5;
+  Widget _buildPrescriptionHeader() {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF4CAF50), Color(0xFF66BB6A)],
+        ),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.medical_information,
+                  color: Colors.white, size: 20),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  _prescription!.diseaseName,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          if (_prescription!.patientName.isNotEmpty) ...[
+            Text(
+              'Bệnh nhân: ${_prescription!.patientName}',
+              style: const TextStyle(color: Colors.white70, fontSize: 13),
+            ),
+            const SizedBox(height: 4),
+          ],
+          Text(
+            'BS. ${_prescription!.doctorName}  |  ${_prescription!.treatmentDays} ngày điều trị',
+            style: const TextStyle(color: Colors.white70, fontSize: 13),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Sáng ${_prescription!.morningTime} - Tối ${_prescription!.eveningTime}  |  ${_prescription!.medicines.length} loại thuốc',
+            style: const TextStyle(color: Colors.white70, fontSize: 13),
+          ),
+        ],
+      ),
+    );
+  }
 
+  Widget _buildMedicineCard(PrescriptionMedicine med) {
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
-        onTap: () {
-          _showMedicineDetail(medicine);
-        },
+        onTap: () => _showMedicineDetail(med),
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Row(
             children: [
-              // Medicine icon
+              // Icon thuoc
               Container(
                 width: 56,
                 height: 56,
                 decoration: BoxDecoration(
-                  color: _getTypeColor(medicine.type).withOpacity(0.1),
+                  color: med.color.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(
-                  _getTypeIcon(medicine.type),
-                  color: _getTypeColor(medicine.type),
+                  _getTypeIcon(med.type),
+                  color: med.color,
                   size: 28,
                 ),
               ),
               const SizedBox(width: 16),
-              // Medicine info
+              // Thong tin
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      children: [
-                        Text(
-                          medicine.name,
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        if (isLow) ...[
-                          const SizedBox(width: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 6,
-                              vertical: 2,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.red.withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: const Text(
-                              'Sắp hết',
-                              style: TextStyle(
-                                color: Colors.red,
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ],
+                    Text(
+                      med.name,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      '${medicine.type} - Liều: ${medicine.dosage}',
+                      med.type,
                       style: TextStyle(color: Colors.grey[600], fontSize: 13),
                     ),
                     const SizedBox(height: 8),
-                    // Stock bar
+                    // Lieu Sang / Toi
                     Row(
                       children: [
-                        Expanded(
-                          child: ClipRoundedRect(
-                            child: LinearProgressIndicator(
-                              value: percentage,
-                              backgroundColor: Colors.grey[200],
-                              valueColor: AlwaysStoppedAnimation<Color>(
-                                isLow ? Colors.red : Colors.green,
-                              ),
-                              minHeight: 6,
-                            ),
-                          ),
+                        _buildDoseBadge(
+                          'Sáng: ${med.morningDose}',
+                          const Color(0xFF66BB6A),
                         ),
                         const SizedBox(width: 8),
-                        Text(
-                          'Còn ${medicine.remaining}/${medicine.total}',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: isLow ? Colors.red : Colors.grey[600],
-                            fontWeight: isLow ? FontWeight.bold : FontWeight.normal,
-                          ),
+                        _buildDoseBadge(
+                          'Tối: ${med.eveningDose}',
+                          const Color(0xFF5C6BC0),
                         ),
                       ],
                     ),
@@ -180,156 +209,215 @@ class _MedicineListScreenState extends State<MedicineListScreen> {
     );
   }
 
+  Widget _buildDoseBadge(String text, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(
+        text,
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+          color: color,
+        ),
+      ),
+    );
+  }
+
   IconData _getTypeIcon(String type) {
-    switch (type) {
-      case 'Viên nén':
-        return Icons.medication;
-      case 'Viên nang':
-        return Icons.medication_outlined;
-      case 'Siro':
-        return Icons.local_drink;
-      case 'Tiêm':
-        return Icons.vaccines;
-      default:
-        return Icons.medical_services;
+    if (type.contains('nang')) return Icons.medication_outlined;
+    if (type.contains('nen') || type.contains('phim')) return Icons.medication;
+    if (type.contains('Siro') || type.contains('bot') || type.contains('goi')) {
+      return Icons.local_drink;
     }
+    return Icons.medical_services;
   }
 
-  Color _getTypeColor(String type) {
-    switch (type) {
-      case 'Viên nén':
-        return Colors.blue;
-      case 'Viên nang':
-        return Colors.purple;
-      case 'Siro':
-        return Colors.orange;
-      case 'Tiêm':
-        return Colors.red;
-      default:
-        return Colors.teal;
-    }
-  }
-
-  void _showMedicineDetail(_MedicineData medicine) {
+  void _showMedicineDetail(PrescriptionMedicine med) {
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (context) {
-        return Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.grey[300],
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 20),
-              Text(
-                medicine.name,
-                style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 16),
-              _buildDetailRow('Loại thuốc', medicine.type),
-              _buildDetailRow('Liều lượng', medicine.dosage),
-              _buildDetailRow('Còn lại', '${medicine.remaining} / ${medicine.total}'),
-              const SizedBox(height: 20),
-              Row(
+        return DraggableScrollableSheet(
+          initialChildSize: 0.6,
+          minChildSize: 0.4,
+          maxChildSize: 0.85,
+          expand: false,
+          builder: (context, scrollController) {
+            return SingleChildScrollView(
+              controller: scrollController,
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: () {
-                        Navigator.pop(context);
-                      },
-                      icon: const Icon(Icons.edit),
-                      label: const Text('Chỉnh sửa'),
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: Colors.grey[300],
+                        borderRadius: BorderRadius.circular(2),
+                      ),
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: () {
-                        Navigator.pop(context);
-                        Navigator.pushNamed(context, '/add-schedule');
-                      },
-                      icon: const Icon(Icons.alarm_add),
-                      label: const Text('Đặt lịch'),
-                    ),
+                  const SizedBox(height: 20),
+                  Row(
+                    children: [
+                      Container(
+                        width: 48,
+                        height: 48,
+                        decoration: BoxDecoration(
+                          color: med.color.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Icon(
+                          _getTypeIcon(med.type),
+                          color: med.color,
+                          size: 24,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              med.name,
+                              style: const TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            Text(
+                              med.type,
+                              style: TextStyle(
+                                color: Colors.grey[600],
+                                fontSize: 14,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
+                  const SizedBox(height: 20),
+                  // Lieu luong
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildDoseCard(
+                          'Buổi sáng',
+                          med.morningDose,
+                          _prescription!.morningTime,
+                          const Color(0xFF66BB6A),
+                          Icons.wb_sunny_outlined,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _buildDoseCard(
+                          'Buổi tối',
+                          med.eveningDose,
+                          _prescription!.eveningTime,
+                          const Color(0xFF5C6BC0),
+                          Icons.nightlight_round,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  _buildDetailSection('Thành phần', med.ingredient),
+                  _buildDetailSection('Công dụng', med.usage),
+                  _buildDetailSection('Hướng dẫn sử dụng', med.instruction),
+                  const SizedBox(height: 16),
                 ],
               ),
-              const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                child: TextButton.icon(
-                  onPressed: () {
-                    Navigator.pop(context);
-                    setState(() {
-                      _medicines.remove(medicine);
-                    });
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Đã xóa ${medicine.name}')),
-                    );
-                  },
-                  icon: const Icon(Icons.delete_outline, color: Colors.red),
-                  label: const Text('Xóa thuốc', style: TextStyle(color: Colors.red)),
-                ),
-              ),
-            ],
-          ),
+            );
+          },
         );
       },
     );
   }
 
-  Widget _buildDetailRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+  Widget _buildDoseCard(
+    String period,
+    String dose,
+    String time,
+    Color color,
+    IconData icon,
+  ) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withOpacity(0.2)),
+      ),
+      child: Column(
         children: [
-          Text(label, style: TextStyle(color: Colors.grey[600], fontSize: 15)),
-          Text(value, style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 15)),
+          Icon(icon, color: color, size: 22),
+          const SizedBox(height: 6),
+          Text(
+            period,
+            style: TextStyle(
+              fontSize: 12,
+              color: color,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            dose,
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
+          ),
+          Text(
+            time,
+            style: TextStyle(fontSize: 11, color: Colors.grey[500]),
+          ),
         ],
       ),
     );
   }
-}
 
-class ClipRoundedRect extends StatelessWidget {
-  final Widget child;
-  const ClipRoundedRect({super.key, required this.child});
-
-  @override
-  Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(4),
-      child: child,
+  Widget _buildDetailSection(String title, String content) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: Colors.grey[700],
+            ),
+          ),
+          const SizedBox(height: 4),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.grey[50],
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              content,
+              style: const TextStyle(fontSize: 14, height: 1.4),
+            ),
+          ),
+        ],
+      ),
     );
   }
-}
-
-class _MedicineData {
-  final String name;
-  final String type;
-  final String dosage;
-  int remaining;
-  final int total;
-
-  _MedicineData({
-    required this.name,
-    required this.type,
-    required this.dosage,
-    required this.remaining,
-    required this.total,
-  });
 }
