@@ -21,6 +21,29 @@ class Medicine {
 
   bool get isLowStock => remainingQuantity <= 5;
 
+  factory Medicine.fromJson(Map<String, dynamic> json) {
+    return Medicine(
+      id: json['id'] as String,
+      name: json['name'] as String,
+      type: json['type'] as String,
+      dosage: json['dosage'] as String,
+      imagePath: json['imagePath'] as String?,
+      totalQuantity: json['totalQuantity'] as int,
+      remainingQuantity: json['remainingQuantity'] as int,
+      note: json['note'] as String?,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'name': name,
+        'type': type,
+        'dosage': dosage,
+        'imagePath': imagePath,
+        'totalQuantity': totalQuantity,
+        'remainingQuantity': remainingQuantity,
+        'note': note,
+      };
+
   Medicine copyWith({
     String? id,
     String? name,

@@ -7,6 +7,7 @@ import '../models/prescription.dart';
 Prescription createSamplePrescription() {
   return Prescription(
     id: 'rx_001',
+    patientName: 'Nguyễn Văn Demo',
     diseaseName: 'Viêm dạ dày - Nhiễm Helicobacter pylori',
     doctorName: 'BS. Nguyễn Văn An',
     startDate: DateTime(2026, 4, 6), // Thứ 2, 06/04/2026
