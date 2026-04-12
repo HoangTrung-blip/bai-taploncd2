@@ -1,4 +1,7 @@
 import 'package:flutter/material.dart';
+import '../models/medicine.dart';
+import '../services/medicine_service.dart';
+import '../services/schedule_service.dart';
 
 class AddScheduleScreen extends StatefulWidget {
   const AddScheduleScreen({super.key});
@@ -8,20 +11,16 @@ class AddScheduleScreen extends StatefulWidget {
 }
 
 class _AddScheduleScreenState extends State<AddScheduleScreen> {
-  String _selectedMedicine = 'Paracetamol';
+  String? _selectedMedicineId;
+  String _selectedMedicineName = '';
   String _selectedFrequency = 'daily';
   final List<String> _selectedTimes = ['08:00'];
   final List<bool> _selectedWeekDays = [false, true, false, true, false, true, false];
   DateTime _startDate = DateTime.now();
   DateTime? _endDate;
 
-  final List<String> _medicines = [
-    'Paracetamol',
-    'Vitamin C',
-    'Amoxicillin',
-    'Omeprazol',
-    'Siro ho',
-  ];
+  List<Medicine> _medicines = [];
+  bool _isLoading = true;
 
   final Map<String, String> _frequencyLabels = {
     'daily': 'Hàng ngày',
@@ -33,13 +32,32 @@ class _AddScheduleScreenState extends State<AddScheduleScreen> {
   final List<String> _weekDayNames = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
 
   @override
+  void initState() {
+    super.initState();
+    _loadMedicines();
+  }
+
+  Future<void> _loadMedicines() async {
+    try {
+      _medicines = await MedicineService.getAll();
+      if (_medicines.isNotEmpty) {
+        _selectedMedicineId = _medicines.first.id;
+        _selectedMedicineName = _medicines.first.name;
+      }
+    } catch (_) {}
+    if (mounted) setState(() => _isLoading = false);
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Đặt lịch nhắc'),
         centerTitle: true,
       ),
-      body: SingleChildScrollView(
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -51,7 +69,7 @@ class _AddScheduleScreenState extends State<AddScheduleScreen> {
             ),
             const SizedBox(height: 8),
             DropdownButtonFormField<String>(
-              value: _selectedMedicine,
+              value: _selectedMedicineId,
               decoration: InputDecoration(
                 prefixIcon: const Icon(Icons.medication),
                 border: OutlineInputBorder(
@@ -59,11 +77,12 @@ class _AddScheduleScreenState extends State<AddScheduleScreen> {
                 ),
               ),
               items: _medicines.map((m) {
-                return DropdownMenuItem(value: m, child: Text(m));
+                return DropdownMenuItem(value: m.id, child: Text(m.name));
               }).toList(),
               onChanged: (value) {
                 setState(() {
-                  _selectedMedicine = value!;
+                  _selectedMedicineId = value;
+                  _selectedMedicineName = _medicines.firstWhere((m) => m.id == value).name;
                 });
               },
             ),
@@ -216,14 +235,42 @@ class _AddScheduleScreenState extends State<AddScheduleScreen> {
               width: double.infinity,
               height: 50,
               child: ElevatedButton.icon(
-                onPressed: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Đã lưu lịch nhắc uống thuốc'),
-                      backgroundColor: Colors.green,
-                    ),
-                  );
-                  Navigator.pop(context);
+                onPressed: () async {
+                  if (_selectedMedicineName.isEmpty) return;
+                  try {
+                    final data = <String, dynamic>{
+                      'medicineName': _selectedMedicineName,
+                      'times': _selectedTimes,
+                      'frequency': _selectedFrequency,
+                      'startDate': _startDate.toIso8601String().split('T')[0],
+                    };
+                    if (_endDate != null) {
+                      data['endDate'] = _endDate!.toIso8601String().split('T')[0];
+                    }
+                    if (_selectedFrequency == 'weekly') {
+                      final weekDays = <int>[];
+                      for (int i = 0; i < 7; i++) {
+                        if (_selectedWeekDays[i]) weekDays.add(i + 1);
+                      }
+                      data['weekDays'] = weekDays;
+                    }
+                    await ScheduleService.create(data);
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Đã lưu lịch nhắc uống thuốc'),
+                          backgroundColor: Colors.green,
+                        ),
+                      );
+                      Navigator.pop(context, true);
+                    }
+                  } catch (e) {
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('Lỗi: $e'), backgroundColor: Colors.red),
+                      );
+                    }
+                  }
                 },
                 icon: const Icon(Icons.alarm_add),
                 label: const Text('Lưu lịch nhắc', style: TextStyle(fontSize: 16)),
@@ -284,7 +331,7 @@ class _AddScheduleScreenState extends State<AddScheduleScreen> {
             style: TextStyle(fontWeight: FontWeight.bold, color: Colors.green),
           ),
           const SizedBox(height: 8),
-          Text('Thuốc: $_selectedMedicine'),
+          Text('Thuốc: $_selectedMedicineName'),
           Text('Tần suất: ${_frequencyLabels[_selectedFrequency]}'),
           Text('Giờ uống: ${_selectedTimes.join(", ")}'),
           if (_selectedFrequency == 'weekly')
