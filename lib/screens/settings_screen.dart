@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../services/settings_service.dart';
+import '../services/auth_service.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -13,6 +15,34 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _pushNotificationEnabled = true;
   bool _cloudSyncEnabled = false;
   int _snoozeMinutes = 10;
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSettings();
+  }
+
+  Future<void> _loadSettings() async {
+    setState(() => _isLoading = true);
+    try {
+      final data = await SettingsService.getAll();
+      setState(() {
+        _soundEnabled = data['sound_enabled'] == 'true';
+        _vibrationEnabled = data['vibration_enabled'] == 'true';
+        _pushNotificationEnabled = data['push_notification_enabled'] == 'true';
+        _cloudSyncEnabled = data['cloud_sync_enabled'] == 'true';
+        _snoozeMinutes = int.tryParse(data['snooze_minutes'] ?? '10') ?? 10;
+      });
+    } catch (_) {}
+    if (mounted) setState(() => _isLoading = false);
+  }
+
+  Future<void> _saveSetting(String key, String value) async {
+    try {
+      await SettingsService.set(key, value);
+    } catch (_) {}
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -21,7 +51,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
         title: const Text('Cài đặt'),
         centerTitle: true,
       ),
-      body: ListView(
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : ListView(
         children: [
           // Notification settings
           _buildSectionHeader('Thông báo'),
@@ -30,9 +62,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
             subtitle: const Text('Phát âm thanh khi đến giờ uống thuốc'),
             value: _soundEnabled,
             onChanged: (value) {
-              setState(() {
-                _soundEnabled = value;
-              });
+              setState(() => _soundEnabled = value);
+              _saveSetting('sound_enabled', value.toString());
             },
             secondary: const Icon(Icons.volume_up),
           ),
@@ -41,9 +72,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
             subtitle: const Text('Rung thiết bị khi có nhắc nhở'),
             value: _vibrationEnabled,
             onChanged: (value) {
-              setState(() {
-                _vibrationEnabled = value;
-              });
+              setState(() => _vibrationEnabled = value);
+              _saveSetting('vibration_enabled', value.toString());
             },
             secondary: const Icon(Icons.vibration),
           ),
@@ -52,9 +82,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
             subtitle: const Text('Hiển thị thông báo trên thanh trạng thái'),
             value: _pushNotificationEnabled,
             onChanged: (value) {
-              setState(() {
-                _pushNotificationEnabled = value;
-              });
+              setState(() => _pushNotificationEnabled = value);
+              _saveSetting('push_notification_enabled', value.toString());
             },
             secondary: const Icon(Icons.notifications),
           ),
@@ -74,29 +103,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
             subtitle: const Text('Sao lưu dữ liệu lên đám mây'),
             value: _cloudSyncEnabled,
             onChanged: (value) {
-              setState(() {
-                _cloudSyncEnabled = value;
-              });
-              if (value) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Chức năng đồng bộ sẽ được tích hợp sau'),
-                  ),
-                );
-              }
+              setState(() => _cloudSyncEnabled = value);
+              _saveSetting('cloud_sync_enabled', value.toString());
             },
             secondary: const Icon(Icons.cloud_sync),
-          ),
-          ListTile(
-            leading: const Icon(Icons.download),
-            title: const Text('Xuất dữ liệu'),
-            subtitle: const Text('Xuất lịch sử uống thuốc ra file'),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Chức năng sẽ được tích hợp sau')),
-              );
-            },
           ),
           const Divider(),
 
@@ -114,47 +124,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           const SizedBox(height: 24),
 
-          // Reset button
+          // Logout button
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: OutlinedButton.icon(
-              onPressed: () {
-                showDialog(
-                  context: context,
-                  builder: (context) => AlertDialog(
-                    title: const Text('Xác nhận'),
-                    content: const Text(
-                      'Bạn có chắc muốn xóa toàn bộ dữ liệu? '
-                      'Hành động này không thể hoàn tác.',
-                    ),
-                    actions: [
-                      TextButton(
-                        onPressed: () => Navigator.pop(context),
-                        child: const Text('Hủy'),
-                      ),
-                      TextButton(
-                        onPressed: () {
-                          Navigator.pop(context);
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Đã xóa toàn bộ dữ liệu')),
-                          );
-                        },
-                        child: const Text(
-                          'Xóa',
-                          style: TextStyle(color: Colors.red),
-                        ),
-                      ),
-                    ],
-                  ),
-                );
+            child: ElevatedButton.icon(
+              onPressed: () async {
+                await AuthService.logout();
+                if (mounted) {
+                  Navigator.pushNamedAndRemoveUntil(context, '/login', (_) => false);
+                }
               },
-              icon: const Icon(Icons.delete_forever, color: Colors.red),
-              label: const Text(
-                'Xóa toàn bộ dữ liệu',
-                style: TextStyle(color: Colors.red),
-              ),
-              style: OutlinedButton.styleFrom(
-                side: const BorderSide(color: Colors.red),
+              icon: const Icon(Icons.logout),
+              label: const Text('Đăng xuất'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
+                minimumSize: const Size(double.infinity, 48),
               ),
             ),
           ),
@@ -196,6 +181,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   setState(() {
                     _snoozeMinutes = value!;
                   });
+                  _saveSetting('snooze_minutes', value.toString());
                   Navigator.pop(context);
                 },
               );
